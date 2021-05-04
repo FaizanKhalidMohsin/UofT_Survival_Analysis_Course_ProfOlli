@@ -1,0 +1,666 @@
+---
+title: "Survival Analysis HW 3"
+author: "Faizan Khalid Mohsin"
+date: "March 14, 2019"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(survival)
+require(dplyr)
+library(Hmisc)
+library(survminer)
+
+```
+
+\newpage
+
+# Question 2
+
+## Question 2 a.
+
+This is done seperately in the attachment provided.
+
+Below we do some data cleaning and present our steps and some thoughts.
+
+```{r data}
+data(veteran)
+# Data Cleaning
+veteran$prior = as.factor(veteran$prior/10)
+veteran$trt = as.factor(veteran$trt)
+str(veteran)
+# Missing data.  
+all(!is.na(veteran)==TRUE) # No missing data
+table(veteran$trt, veteran$status)
+```
+
+
+Note that from the above table we can see that the two groups (treatment and no treatment in the rows 1 and 2) are well balance. Further, note that most of the people died in this study as the majority of the poeple have status 1. Lastly, we did not find any missind data in this data set. The data is now ready for analysis. 
+
+## Question 2 b. 
+
+We will now fit the model.
+
+```{r}
+
+# Final Exam practice questions
+
+library(dplyr)
+#data_bres = select(veteran, trt, status, time)
+data_b = veteran[c(1:3, 70, 76,72), ]
+data_b = select(data_b[order(data_b$time), ], time, trt, status)
+data_b = data_b[1:4,]
+
+Surv(data_b$time, data_b$status)
+Surv(data_b$time, data_b$status)[data_b$trt==1]
+Surv(data_b$time, data_b$status)[data_b$trt==2]
+
+fit0 <- coxph(Surv(time, status) ~ as.factor(trt), ties=c("breslow") , data=data_b)
+basehaz(fit0, centered = FALSE)
+fit0
+summary(fit0)
+
+survdiff(Surv(time, status) ~ as.factor(trt) , data=data_b)
+summary(survdiff(Surv(time, status) ~ as.factor(trt) , data=data_b))
+
+
+residuals(fit0,type = "martingal")
+
+b1<-fit0$coefficients[1]
+bh <- basehaz(fit0, centered = FALSE) 
+breslow <- bh
+s0<-exp(-breslow[,1])
+s1<-exp(-breslow[,1]*exp(b1) )
+difference = log(-log(s1)) - log(-log(s0))
+
+
+plot(bh[,2],log(-log(s0)), type="l",lty=1, col=1, 
+     xlab="Time", ylab="log(-log(s0)", main="Log-log Plot")
+points(bh[,2], log(-log(s1)),col=2, type="l", lty=2, lwd=2) 
+points(bh[,2],difference, type="l", col=3, lty=3, lwd=3)
+legend("bottomright", col=1:3,lty = 1:3 , lwd=2 , 
+       legend=c("Control Group", "Treatment Group", "Difference of the two curves"))
+
+martingaleres <- residuals(fit0, type=c('martingale'))
+martingaleres
+devianceres <- residuals(model, type=c('deviance'))
+
+# Final Exam practice questions end. 
+
+# Fitting the model. 
+fit <- survfit(Surv(time, status) ~ trt , data=veteran )
+
+# Plotting the model
+plot(fit, fun="cloglog", lty = 1:2, lwd = 2, col = 1:2,
+     main = "Plot of Log-log Suvival Curves", 
+     xlab = "Time", ylab = "log(-log(S(t)")
+legend("bottomright", col=1:3,lty = 1:3, lwd=3,
+       legend=c("Treatment Group", "Control Group", "Difference of the two curves"))
+#ggsurvplot(fit, data = veteran, risk.table = TRUE, fun="cloglog")
+
+```
+
+
+From the plot we see that the curves cross/intercept at least three points, they are not parallel. Hence, as the log-log plot of the survival curves are not parallel the assumption of proportional hazards is violated. 
+
+
+
+
+```{r}
+
+model <- coxph(Surv(time, status) ~ as.factor(trt) , data=veteran ) 
+summary(model) 
+
+cox<-coxph(Surv(time, status) ~ as.factor(trt) , data=veteran)
+b1<-cox$coefficients[1]
+bh <- basehaz(cox) 
+breslow <- bh
+s0<-exp(-breslow[,1])
+s1<-exp(-breslow[,1]*exp(b1))
+difference = log(-log(s1)) - log(-log(s0))
+
+plot(bh[,2],log(-log(s0)), type="l",lty=1, col=1, 
+     xlab="Time", ylab="log(-log(s0)", main="Log-log Plot")
+points(bh[,2], log(-log(s1)),col=2, type="l", lty=2, lwd=2) 
+points(bh[,2],difference, type="l", col=3, lty=3, lwd=3)
+legend("bottomright", col=1:3,lty = 1:3 , lwd=2 , 
+       legend=c("Control Group", "Treatment Group", "Difference of the two curves"))
+
+```
+
+
+<!-- From the above plot we see that the two survival curves for the two treatments are practically parallel, hence, the proportionality of hazard functions in the context of Cox models is not violated.  -->
+
+## Question 2 c. 
+
+<!-- S0(t) = exp{−ˆ Λ0(t)} andˆ S1(t) = exp{−ˆ Λ0(t)exp(ˆ β)}, where ˆ Λ0(t) is the Breslow estimate for the cumulative baseline hazard. Present a log-log plot of such survival functions and interpret it. Why this plot is not useful for checking the proportionality assumption? -->
+
+
+```{r}
+model <- coxph(Surv(time, status) ~ as.factor(trt) , data=veteran)
+summary(model)
+
+cox<-coxph(Surv(time, status) ~ as.factor(trt) , data=veteran)
+b1<-cox$coefficients[1]
+bh <- basehaz(cox) 
+breslow <- bh
+s0<-exp(-breslow[,1])
+s1<-exp(-breslow[,1]*exp(b1))
+difference = log(-log(s1)) - log(-log(s0))
+
+plot(bh[,2],log(-log(s0)), type="l",lty=1, col=1, 
+     xlab="Time", ylab="log(-log(s0)", main="Log-log Plot")
+points(bh[,2], log(-log(s1)),col=2, type="l", lty=2, lwd=2) 
+points(bh[,2],difference, type="l", col=3, lty=3, lwd=3)
+legend("bottomright", col=1:3,lty = 1:3 , lwd=2 , 
+       legend=c("Control Group", "Treatment Group", "Difference of the two curves"))
+
+```
+
+This is not useful for testing proportionallity of hazard functions because that is an assumption of the model. So once we fit the model which assumes proportionality, the estimates of the model will already have proportionality assumption built in them. Hence, there is no point in testing it this way. 
+
+
+# Question 3
+
+Separate Breslow estimates for the two baseline hazards can now be obtained to compare the baseline survival functions. Present and interpret a log-log plot of the baseline survival functions to check the proportionality assumption of the treatment effect in the adjusted model.
+
+
+```{r}
+model <- coxph(Surv(time, status) ~ strata(trt) + karno + age 
+               + as.factor(prior)
+               + as.factor(celltype) + diagtime 
+               , data=veteran)
+
+
+breslow <- basehaz(model, centered = FALSE)
+breslow0 <- breslow[1:61,]
+breslow1 <- breslow[62:114,]
+s0<-exp(-breslow0[,1])
+s1<-exp(-breslow1[,1])
+
+plot(breslow0[,2],log(-log(s0)),
+     type="l",lty=1, col=1,
+     xlab="Time",
+     ylab="log(-log(s0)",
+     main="Log-Log Plot")
+points(breslow1[,2], log(-log(s1)),col=2, type="l", lty=2, lwd=2)
+legend("bottomright", col=1:2,lty = 1:2 ,
+       legend=c("Control Group", "Treatment Group")
+       , lwd=2)
+
+```
+
+From the above plot we see that the two curves are roughly parallel. Further, the diffence plot shows that the diffence over time practically constant, hence, $\beta$ is constant overtime. Therefore, the proportionality assumption of the treatment effect in the adjusted model holds. 
+
+# Question 4 
+
+## Question 4 a.
+
+Investigate the appropriateness of the linearity assumptions made on the effects of the continuous covariates using appropriate residual plots.
+
+
+```{r, eval=FALSE, fig.width=4, fig.height=13}
+
+model <- coxph(Surv(time, status) ~ as.factor(trt) + karno + age 
+                                  + as.factor(prior)
+                                  + as.factor(celltype) + diagtime 
+                                  , data=veteran)
+
+martingaleres <- residuals(model, type=c('martingale'))
+devianceres <- residuals(model, type=c('deviance'))
+dfbeta <- residuals(model, type=c('dfbeta'))
+dfbetas <- residuals(model, type=c('dfbetas'))
+
+# Check martingale and deviance residuals for continuous covariates:
+
+par(mfrow=c(3,1))
+
+plot(veteran$age, martingaleres, xlab='Age', ylab='Martingale residual')
+lines(lowess(veteran$age, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$diagtime, martingaleres, xlab='Diagnosis Time', ylab='Martingale residual')
+lines(lowess(veteran$diagtime, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$karno, martingaleres, xlab='Karnofsky Score', ylab='Martingale residual')
+lines(lowess(veteran$karno, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+# Deviance residuals
+
+plot(veteran$age, devianceres, xlab='Age', ylab='Deviance residual')
+lines(lowess(veteran$age, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$diagtime, devianceres, xlab='Diagnosis Time', ylab='Deviance residual')
+lines(lowess(veteran$diagtime, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$karno, devianceres, xlab='Karnofsky Score', ylab='Deviance residual')
+lines(lowess(veteran$karno, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+```
+
+
+```{r, echo=FALSE, fig.width=4, fig.height=13}
+
+model <- coxph(Surv(time, status) ~ as.factor(trt) + karno + age 
+                                  + as.factor(prior)
+                                  + as.factor(celltype) + diagtime 
+                                  , data=veteran)
+
+martingaleres <- residuals(model, type=c('martingale'))
+devianceres <- residuals(model, type=c('deviance'))
+dfbeta <- residuals(model, type=c('dfbeta'))
+dfbetas <- residuals(model, type=c('dfbetas'))
+
+# Check martingale and deviance residuals for continuous covariates:
+
+par(mfrow=c(3,1))
+
+plot(veteran$age, martingaleres, xlab='Age', ylab='Martingale residual')
+lines(lowess(veteran$age, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$diagtime, martingaleres, xlab='Diagnosis Time', ylab='Martingale residual')
+lines(lowess(veteran$diagtime, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$karno, martingaleres, xlab='Karnofsky Score', ylab='Martingale residual')
+lines(lowess(veteran$karno, martingaleres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+# Deviance residuals
+
+plot(veteran$age, devianceres, xlab='Age', ylab='Deviance residual')
+lines(lowess(veteran$age, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$diagtime, devianceres, xlab='Diagnosis Time', ylab='Deviance residual')
+lines(lowess(veteran$diagtime, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+plot(veteran$karno, devianceres, xlab='Karnofsky Score', ylab='Deviance residual')
+lines(lowess(veteran$karno, devianceres), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+
+```
+
+
+First, note that we will mainly be using the deviance residual plots and not the martingale plots because they are skewed, whereas the deviance residual plots are rescaled versions of the martingale residuals, to make them more symmetric around zero. 
+
+From the "age" residual deviance plot we see that there is no apparent patern. Hence, linearity assumption of for "age" is not violated. 
+
+From the "diagnosis time" deviance residual plot, we see that the obsevations are mostly concentrated to the left handside (right skewed), however, again no outright clear pattern is observed apart from the skewness of the data. Therefore, the linearity assumption for "daignosis time" is not violated. However, perhaps a log transformation of the diagnosis time should be done to decrease the skewness.
+
+From the "Karnofsky score" deviance residual plot, again there is no distinct pattern. The data points appear to be completely random. Hence, the  linearity assumption of for "Karnofsky score" is not violated.
+
+## Question 4 b. 
+
+Check also the presence of potential influential observations.
+
+```{r, fig.width=6, fig.height=15}
+
+# Scaled dfbeta influence measures (compare to the threshold of 2/sqrt(n)):
+par(mfrow=c(3,1))
+
+plot(veteran$age, dfbetas[,7], xlab='Age', ylab='dfbetas')
+lines(lowess(veteran$age, dfbetas[,7]), lwd=2, col='blue')
+abline(h=c(-2/sqrt(nrow(dfbetas)), 0, 2/sqrt(nrow(dfbetas))), lty='dotted')
+
+plot(veteran$diagtime, dfbetas[,6], xlab='Diagnosis Time', ylab='dfbetas')
+lines(lowess(veteran$diagtime, dfbetas[,6]), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+abline(h=c(-2/sqrt(nrow(dfbetas)), 0, 2/sqrt(nrow(dfbetas))), lty='dotted')
+
+plot(veteran$karno, dfbetas[,5], xlab='Karnofsky Score', ylab='dfbetas')
+lines(lowess(veteran$karno, dfbetas[,5]), lwd=2, col='blue')
+abline(h=0, lty='dotted')
+abline(h=c(-2/sqrt(nrow(dfbetas)), 0, 2/sqrt(nrow(dfbetas))), lty='dotted')
+
+```
+
+All the observations that are outside of the bands are potential outliers or influencer observations.
+
+
+```{r}
+
+# EXTRACT THE INLUENTIAL POINTS.
+upper = 2/sqrt(nrow(dfbetas))
+
+aged_out<-ifelse( abs(dfbetas[,7]) >= upper, 1, 0)
+influentialaged_out<-subset(aged_out, aged_out==1)
+
+diagtime_out<-ifelse( abs(dfbetas[,6]) >= upper, 1, 0)
+influentialdiagtimed_out<-subset(diagtime_out, diagtime_out==1)
+
+karno_out<-ifelse( abs(dfbetas[,5]) >= upper, 1,0)
+influentialkarno_out<-subset(karno_out, karno_out==1)
+
+age_outliers = names(influentialaged_out)
+diagtime_outliers = names(influentialdiagtimed_out)
+karno_outliers = names(influentialkarno_out)
+
+age_outliers
+diagtime_outliers
+karno_outliers
+
+```
+
+
+The outliers that we found for the variable age were `r age_outliers`. 
+
+The outliers that we found for the variable diagnosis time were `r diagtime_outliers`.
+
+The outliers that we found for the variable Karnofsky scores were `r karno_outliers`.
+
+## Question 4 c. 
+
+Investigate the appropriateness of the proportinal hazards assumptions through appropriate residual plots, and statistical tests. Report the tests for both the residual-time correlations, and covariate-time interactions added to the Cox model (the latter can be implemented using the tt argument of the coxph function).
+
+```{r}
+
+# Checks for proportionality:
+output.cox.zph = cox.zph(model, global=FALSE)
+output.cox.zph
+
+```
+
+
+From the test for proportional hazards, it can be seen that we conducted eight tests. Hence, we need to correct for multiple testing, hence, our significance level will be $5\%/8 = 0.00625$. Hence, only the variable Karnofsky scores has a p-values which is statistically significant at the bonferroni level. Hence, we have strong evidence only for the variable Karnofsky scores that the hazard ratios are not proportional overtime. 
+
+The variables age, prior and the celltype with factor large, have statistically significant p-values at the significance level of 5%. But do not have "strong" evidence to reject the Null (Null:hazard ratios are proportional). 
+
+The statistical tests used is the was a Time-weighted score tests of the proportional hazards. The statistical test we performed is a Schoenefeld residual test. It is a chi-square test.
+
+We will now plot the Schoenefeld residual plots. 
+
+```{r, fig.width=15, fig.height=15}
+# Plotting 
+par(mfrow=c(2,2))
+
+for (i in 1:8){
+  plot(cox.zph(model, global=FALSE), var=i)
+  abline(h=0, lty=2, col = "red", lwd = 2)
+}
+
+```
+
+From the above Schoenefeld residual plots we see that for the variable Karnofsky scores, majority of the time the confidence interval bands do not include zero in them. Only around time 99 do they begin to include zero. Hence, this residual plot also confirms that the hazard ratios are not proportional for this variable. This is what we found in the statistical test performed above.  
+
+For the variable age we see that there is a distinct increasing pattern, however, most of the time zero is in the confidence interval bands. Hence, there may be some mild departure from the assumption of proportional hazards but nothing as bad as the Karnofsky scores variable. 
+
+Similarly, there is a distinct decreasing pattern for the prior variable in the residual plots and and increasing pattern for the variable celltype with factor large. And again, similarly, zero is in the confidence interval band with for the majority of the time. 
+
+We will now do tests for covariate-time interactions by adding those to our model.
+
+
+```{r}
+# Examples of tests for covariate-time interactions:
+
+final_data = as.data.frame(model.matrix(~., data=veteran))
+
+model <- coxph(Surv(time, status) ~ trt2 + tt(trt2) +
+                                  + karno 
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell
+                                  + celltypelarge
+                                  + diagtime 
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+model <- coxph(Surv(time, status) ~ trt2 +
+                                  + karno + tt(karno)
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell
+                                  + celltypelarge
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+model <- coxph(Surv(time, status) ~ trt2 
+                                  + karno 
+                                  + age  + tt(age)
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell
+                                  + celltypelarge
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+model <- coxph(Surv(time, status) ~ trt2 + 
+                                  + karno 
+                                  + age  
+                                  + prior1 + tt(prior1)
+                                  + celltypeadeno
+                                  + celltypesmallcell
+                                  + celltypelarge
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+
+
+model <- coxph(Surv(time, status) ~ trt2 
+                                  + karno
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + tt(celltypeadeno)
+                                  + celltypesmallcell
+                                  + celltypelarge
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+
+model <- coxph(Surv(time, status) ~ trt2 
+                                  + karno
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell + tt(celltypesmallcell)
+                                  + celltypelarge
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+
+model <- coxph(Surv(time, status) ~ trt2 
+                                  + karno
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell 
+                                  + celltypelarge + tt(celltypelarge)
+                                  + diagtime
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+
+model <- coxph(Surv(time, status) ~ trt2 
+                                  + karno
+                                  + age 
+                                  + prior1 
+                                  + celltypeadeno
+                                  + celltypesmallcell 
+                                  + celltypelarge 
+                                  + diagtime + tt(diagtime)
+                                  , tt=function(x,t, ...) x * t
+                                  , data=final_data)
+summary(model)
+
+```
+
+
+From the model output above we see that the covariate-time interaction is only statistically significant for the variables Karnofsky scores and celltype for all the three levels at the 5% significance level. This is similar to what we found previously in the test for proportionality (Schoenfeld residual test).  
+
+
+```{r, include = FALSE, fig.width=6, fig.height=15}
+
+# Checks for proportionality:
+cox.zph(model, global=FALSE)
+
+# par(mfrow=c(3,1))
+# 
+# for (i in 1:9){
+#   plot(cox.zph(model, global=FALSE), var=i)
+#   abline(h=0, lty='dotted')
+# }
+
+```
+
+
+
+# Question 5 
+
+## Question 5 a.
+
+Below is the code, as well as the step what we are doing as comments in the code to explain the algorithm for computing the martingales manually. We also print dim() and head() so it is easy to understand what is happening. 
+
+We basically use the $M_i(t)$ formula from the lecture notes. 
+
+```{r}
+# model_initial <- coxph(Surv(time, status) ~ as.factor(trt) + as.factor(celltype)
+#                                   + karno  + diagtime + age
+#                                   + as.factor(prior)
+#                                   , data=veteran)
+# 
+# summary(model_initial)
+
+# Below we create the data that we will use. 
+final_data = as.data.frame(model.matrix(~., data=veteran))
+
+# We fit the model.
+model <- coxph(Surv(time, status) ~ trt2 + celltypesmallcell + celltypeadeno
+                                  + celltypelarge + karno + diagtime + age + prior1
+                                  , data=final_data)
+summary(model)
+
+# We extract the correct martigales from the model. 
+martingaleres_correct <- residuals(model, type=c('martingale'))
+head(martingaleres_correct)
+sum(martingaleres_correct) # They sum upto zero as expected. 
+
+# We extract the beta's from our model. 
+coeffi = (as.matrix(model$coefficients, nrow = 8, ncol = 1))
+dim(coeffi)
+coeffi
+
+# We only choose the variables we need for the data matrix. 
+data_set = as.matrix(select(final_data, - time, -status)[,-1])
+dim(data_set)
+
+
+# Now we matrix mulitply the data matrix with the coefficients to get the
+# X*betas which we will then exponentiate exp(X*betas)
+coef_matrix= t(t(coeffi) %*% t(data_set))
+dim(coef_matrix)
+
+#  exponentiate exp(X*betas)
+exp_coef_matrix= exp(coef_matrix)
+dim(exp_coef_matrix)
+head(exp_coef_matrix)
+
+# Now we will extract the cumulative base hazard which we need to multiply with 
+# exp(X*betas). This will give us exp(X*betas)*hz.
+bh = basehaz(model, centered = FALSE)
+hz  = left_join(final_data, bh) %>% select(hazard)
+dim(hz)
+head(hz)
+
+# Now we get the exp_coef_matrix*hz = exp(X*betas)*hz which is the expected 
+# number of deaths at time interval t.  
+expected = hz*exp_coef_matrix
+colnames(expected) = "expected"
+dim(expected)
+head(expected)
+
+# Now we subtract the observed number of deaths by our expected number of deaths 
+# at each time t and this gives us the manually calculated martingale residuals.
+
+observed = final_data$status
+martingale_res = observed - expected
+
+```
+
+We will now compare our manually obtained martingales with the correct martingales obtained from the model directly. 
+
+```{r}
+
+head(martingale_res)
+
+head(martingaleres_correct)
+
+
+diff = martingale_res - martingaleres_correct
+
+head(diff)
+
+sum(diff)
+
+
+```
+
+From the above we can see that the actual martingales "martingaleres_correct" and our martingales are equal, upto approximation error. The approximation error is `r sum(diff)`. 
+
+```{r}
+
+summary(martingale_res)
+
+summary(martingaleres_correct)
+ 
+sum(martingale_res)
+
+sum(martingaleres_correct)
+
+
+```
+
+From the above we can see that martingales that we obtained equal to zero, upto the approximation error. 
+
+
+## QUestion 5 b. 
+
+We do question 5 b in a separate attachement. 
+
+```{r}
+
+
+
+
+```
+
+
+```{r, include=FALSE}
+
+log(((45+22)*3352.4/22 - 3352.4)/3391.8)
+
+```
+
+

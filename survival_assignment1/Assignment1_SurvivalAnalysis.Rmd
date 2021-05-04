@@ -1,0 +1,489 @@
+---
+title: 'Assignment 1: Survival Analysis'
+author: "Faizan Khalid Mohsin"
+date: "January 23, 2019"
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(ggplot2)
+library(xtable)
+
+```
+
+\newpage
+
+# Question 1
+
+## Question 1 d: Fitting the Model and Interpreting the Results
+
+```{r }
+age = rep(22:29, 2)
+death = c(433, 412, 337, 331, 287, 242, 215, 192, 
+      24, 36, 66, 102, 138, 171, 185, 200)
+personyears = c(91444, 86835, 75892, 63241, 52023, 42123, 36915, 32215,
+                8556, 12708, 23203, 35415, 46207, 55675, 60470, 64770) 
+z = c(rep(0, 8), rep(1, 8))
+data = data.frame(z, age, personyears)
+
+model1 = glm(death ~ z + factor(age) + offset(log(personyears)), 
+             family = poisson(link="log") )
+
+summary(model1)
+
+
+```
+
+The coefficient of the marital status is -0.602. Therefore, its exponential is `r exp(-0.602)`. Which is the rate ratio between being single and married. Hence, the mortality rate of people who are single is approximately twice that of those who are single (after adjusting for age). 
+
+## Question 1 e: Assessing the Overall Model Fit.
+
+
+Will use the predict function to estimate the expected events in each category. After that we need to exponentiate the estimated values as they are the log expected number of deaths.
+
+The below code produces the expected number of events in each age/marital status group. 
+
+
+```{r}
+
+# Will use the predict function to estimate the expected results.
+predicted = predict(model1, newdata = data)
+predicted = predict(model1, newdata = data, type = "response")
+
+events = exp(predicted) # predicted values. 
+expected_events = data.frame(Age = age[1:8], Single = events[1:8], Married = events[9:16])
+
+```
+
+We get the following expected number of events: 
+
+```{r}
+
+kable(expected_events, caption = "Expected number of events for each age/marital status group.", digits = 2)
+
+```
+
+Just from looking at the values they look quite similar to the observed number of events. 
+
+Compare the expected numbers to observed event counts to assess the overall model ﬁt. What statistical test can you use for this?
+
+
+We will use the chi-square goodness of fit test to compare the expected to observed event counts to assess the overall model fit. 
+
+```{r}
+#?chisq.test
+chisq.test(death, events)
+#chisq.test()
+
+```
+
+The chi-square test with p-value of 0.2348 suggests that the observed event count does follow the distribution of the fitted model and the overall model fit is reasonable. 
+
+To be clear, we are using Pearson's Chi-square goodness of fit test. 
+
+We also perform a likelihood ratio test to test the overall goodness of fit of the model, which we know follows a chi-square distribution with the degrees of freedom being the difference in the number of parameters estimated. Here, the null model (nested in the fitted model), is compared to our fitted model. The null model only has the intercept paramter that is being estimated and our fitted model has 9 parameters including the intercept term being estimated. Hence, the dgrees of freedom for the likelihood ratio test is 8. We do this test both manually and using the "lmtest" package. 
+
+```{r}
+require(lmtest)
+deviance1 = model1$null.deviance - model1$deviance
+1-pchisq(deviance1, 8)
+
+lrtest(model1)
+```
+
+Using both methods we found the p-value to be practically zero. Hence, the overall model is statistically significant, the same as we found using the chi-square test. Hence, the model fits the data well. 
+
+## Question 1 f: Model Fit for Model with Interaction Terms. 
+
+```{r}
+model2 = glm(death ~ z + factor(age) + z:factor(age) + 
+               offset(log(personyears)), family = poisson(link="log") )
+summary(model2)
+
+```
+
+First, we see that none of the interaction terms are statistically insignificant. This shows that the new model with the additional interaction terms are not improving the model fit. Secondly, the significance of the age factors 26, 27, 28 and 29, slightly decreased in significance though still remained significant. Further, the AIC increased when we add the interaction terms. It went from 131.32 to 142.08. As lower AIC values are better, this also shows that the model fit did not improve. 
+
+Lastly, we also do a likelihood ratio test, which we know follows a chi-square distribution with the degrees of freedom being the difference in the number of parameters estimated. We do the test using R below, using the package lmtest and manually as well. 
+
+```{r}
+
+aa = lrtest(model1, model2)
+aa
+deviance = model1$deviance - model2$deviance
+pchisq(deviance, df = 7, lower.tail = FALSE)
+
+```
+
+We find the p-value to be the same using both methods. The p-value is 0.946. Hence, the model fit does not improve after adding interaction terms. 
+
+# Question 4 
+
+## Question 4 a: CHD Mortality Analyisis
+
+The data is obtained from the internet link provided by the professor, and is cleaning using code. We do not show this code as this was already provided by him. The one thing we will mention is that after the data is cleaned it is called "frdeaths". 
+
+```{r, include=FALSE}
+
+rm(list=ls())
+
+data=read.csv("http://individual.utoronto.ca/osaarela/finrisk82.csv", sep = ";")
+
+###### Function to transform the data. 
+
+dataset = data
+dataset$events <- as.numeric(dataset$events)
+dataset$followupyears <- as.numeric(dataset$followupyears)
+dataset$year <- as.numeric(dataset$year)
+ncol(dataset)
+nrow(dataset)
+by(as.numeric(dataset$events), dataset$endpoint, sum)
+by(as.numeric(dataset$followupyears), dataset$endpoint, sum)
+
+# Plot Lexis diagram:
+
+str(dataset)
+table(dataset$endpoint)
+frdeaths <- dataset[dataset$endpoint == 'DEATH',]
+chddeaths <- dataset[dataset$endpoint == 'CHD2',!(names(dataset) %in% c('endpoint','followupyears'))]
+names(chddeaths)[names(chddeaths) == 'events'] <- 'chd'
+frdeaths <- merge(frdeaths, chddeaths)
+frdeaths <- frdeaths[,!(names(frdeaths) %in% 'endpoint')]
+table(frdeaths$events >= frdeaths$chd)
+
+frdeaths$yearmid <- 1984.5 * (frdeaths$year >= 1982 & frdeaths$year < 1987) +
+  1989.5 * (frdeaths$year >= 1987 & frdeaths$year < 1992) +
+  1994.5 * (frdeaths$year >= 1992 & frdeaths$year < 1997) +
+  1999.5 * (frdeaths$year >= 1997 & frdeaths$year < 2002) +
+  2004.5 * (frdeaths$year >= 2002 & frdeaths$year < 2007) +
+  2009 * (frdeaths$year >= 2007 & frdeaths$year < 2011)
+frdeaths$agemid <- 30 * (frdeaths$agegr == '<35') +
+  40 * (frdeaths$agegr == '35-44') +
+  50 * (frdeaths$agegr == '45-54') +
+  60 * (frdeaths$agegr == '55-64') +
+  67.5 * (frdeaths$agegr == '65-69') +
+  72.5 * (frdeaths$agegr == '70-74') +
+  77.5 * (frdeaths$agegr == '75-79') +
+  82.5 * (frdeaths$agegr == '80-84') +
+  89.0 * (frdeaths$agegr == '>85')
+fragg <- aggregate(frdeaths[,c('events','followupyears')], by=list(frdeaths$yearmid, frdeaths$agemid), FUN=sum)
+
+# postscript(file.path(outpath, 'frlexis.eps'), width=6, height=6, paper='special', horizontal=FALSE)
+op <- par(mar=c(4,4,0,0), mgp=c(2,1,0))
+minyr <- 1982
+maxyr <- 2011
+minage <- 25
+maxage <- 94
+
+plot(NULL, NULL, type='n', xlim=c(minyr, maxyr), ylim=c(minage, maxage), axes=FALSE,
+     xlab='calendar year', ylab='age', main='')
+axis(1, at=c(seq(minyr, maxyr, by=5), 2011), las=1, pos=minage)
+axis(2, at=c(25,35,45,55,65,70,75,80,85,94), las=1, pos=minyr)
+
+ygrid <- c(seq(minyr, 2007, by=5), 2011)
+agrid <- c(25,35,45,55,65)
+segments(rep(minyr, length(agrid)), agrid, pmin(minyr + (maxage - agrid), maxyr), pmin(agrid + (maxyr - minyr), maxage), col='gray80')
+
+ygrid <- c(seq(minyr, 2007, by=5), 2011)
+agrid <- c(25,35,45,55,65,70,75,80,85,94)
+segments(rep(minyr, length(agrid)), agrid, rep(maxyr, length(agrid)), agrid, col='gray50')
+segments(ygrid, rep(minage, length(ygrid)), ygrid, rep(maxage, length(ygrid)), col='gray50')
+
+lines(c(maxyr, maxyr), c(minage, maxage))
+
+ygrid <- seq(1840, 1950, by=10)
+agrid <- seq(20, 90, by=5)
+for(i in 1:nrow(fragg)) {
+  text(fragg[i,'Group.1'], fragg[i,'Group.2'], fragg[i,'events'], pos=3, offset=0.15, cex=0.8, col='red')
+  text(fragg[i,'Group.1'], fragg[i,'Group.2'], round(fragg[i,'followupyears']), pos=1, offset=0.15, cex=0.8, col='blue')    
+}
+par(op)
+# dev.off()
+
+# Analysis variables:
+
+frdeaths$ageg <- 1 * (frdeaths$agegr == '<35') +
+  2 * (frdeaths$agegr == '35-44') +
+  3 * (frdeaths$agegr == '45-54') +
+  4 * (frdeaths$agegr == '55-64') +
+  5 * (frdeaths$agegr == '65-69') +
+  6 * (frdeaths$agegr == '70-74') +
+  7 * (frdeaths$agegr == '75-79') +
+  8 * (frdeaths$agegr == '80-84') +
+  9 * (frdeaths$agegr == '>85')
+frdeaths$yearg <- frdeaths$year - min(frdeaths$year) + 1
+frdeaths$sexg <- 0 * (frdeaths$sex == 'men') +
+  1 * (frdeaths$sex == 'women')
+frdeaths$area <- 0 * (frdeaths$rua == 'FIN-EASa') +
+  1 * (frdeaths$rua == 'FIN-WESa')
+nyears <- length(unique(frdeaths$yearg))
+nagegroups <- length(unique(frdeaths$ageg))
+
+# Poisson regression for total mortality:
+modelfit <- glm(events ~ as.factor(yearg) + as.factor(ageg) + sexg + area, offset=log(followupyears), data=frdeaths, family=poisson(link='log'))
+summary(modelfit)
+
+```
+
+
+Now, it can be seen below, the age group '<35' (the first row) does not have any events, as the has 44 for the 0 column, and then zero for all the rest of the columns. The columns are indicating the number of events. Hence, group '<35' did not experience any events. We need all groups to have non-zero number of events. Therefore, we will combine this group with the group '35-45' and have a new group called '<45'. Below is the code for this. The final dataset will be called frdeaths2. 
+```{r}
+
+# Shows that age group '<35' does not have any events. 
+table(frdeaths$ageg, frdeaths$chd)
+ 
+# Creating group '<45'
+frdeaths2 = frdeaths
+
+frdeaths2$ageg[frdeaths2$ageg == 1] = 2
+frdeaths2$ageg = frdeaths2$ageg - 1
+
+table(frdeaths2$ageg, frdeaths2$chd)
+```
+
+From this table we can see that now all age groups have non-zero number of events, as the first row now has 4 under the column 1 (the second column). 
+
+We will now fit the model. 
+
+```{r}
+# Poisson regression for CHD mortality:
+model_chd <- glm(chd ~ as.factor(yearg) + as.factor(ageg) + sexg + area, offset=log(followupyears), data=frdeaths2, family=poisson(link='log'))
+summary(model_chd)
+
+```
+
+The calender year coefficient estimates from group year 14 to 29 are statistically significant.  
+
+```{r, include=FALSE}
+model_chd_nointercept <- glm(chd ~ 0 + as.factor(yearg) + as.factor(ageg) + sexg + area, offset=log(followupyears), data=frdeaths2, family=poisson(link='log'))
+summary(model_chd)
+```
+
+
+Now we will present the estimated calender year log-rate ratios time trend below.
+
+```{r, eval=FALSE, echo=FALSE}
+
+coefficients_all =  coef(model_chd)
+
+alpha = coefficients_all[1]
+calender_years1 = coefficients_all[2: 29]
+calender_years2 = calender_years1 + alpha
+calender_years = c(alpha, calender_years2)
+
+confints = as.data.frame(confint(model_chd))
+
+confints_years = confints[1:29, ]
+
+width = (confints_years[,2] - confints_years[,1])/2
+
+# Now we will create a dataframe for ggplot
+
+df = data.frame(years = 1:29, 
+                calender_years, 
+                width)
+
+
+ggplot(df, aes(x = years, y = calender_years)) +
+    geom_errorbar(aes(ymax = calender_years + width, 
+                    ymin = calender_years - width)) +
+  geom_point(col = 2)
+
+
+qplot(x = 1:29, calender_years,
+      xlab = "Calender Year",
+      ylab = "Estimates of calender year log-rate ratio",
+      main = "Plotting the Estimates of the Log-Rate Ratios Calender Years
+      versus the Calender Years",
+      ylim = c(-25,0))
+
+rateratio_year_trend = function(model_fitted, a = "none", b = "none", main = "none") { 
+  
+  alpha = coef(model_fitted)[1]
+  calender_years =c(0, coef(model_fitted)[2: 29])
+  calender_years = calender_years + alpha
+  
+  if (a == "none" & b == "none"){
+    
+    a = min(calender_years)
+    b = max(calender_years)
+  }
+  
+  heading = "Plotting the Estimates of the Calender Years Log-Rate Ratios versus
+    the Calender Years"
+  
+  if (main != "none"){
+    
+        plot_title = paste(heading, "for" , main)
+    
+  } else {
+    
+        plot_title = heading
+  }
+  
+  qplot(x = 1:29, calender_years, 
+        xlab = "Calender Year", 
+        ylab = "Estimates of calender years log-rate ratio", 
+        main = plot_title, 
+        ylim = c(a, b))
+}
+
+
+
+rateratio_year_trend(model_chd, a = -11, b = 0)
+
+
+```
+
+
+However, first we will create the function that will do this for us, plotting the coefficients with their CI's. We will call it plot_year_trend().
+
+```{r plot_year_trend function}
+
+# Defining function that will plot the estimated 
+# calendar time (log rate-ratios) with their CI's.
+
+plot_year_trend = function(model, title, ylab){
+  
+  # Extract variables from model
+  model_year_coef = coef(model)[2:29]
+  confints_all = as.data.frame(confint(model))
+  confints_calender_years = confints_all[2: 29,]
+  u_ci = confints_calender_years[, 2]
+  l_ci = confints_calender_years[, 1]
+  
+  # Now we will create a dataframe for ggplot
+  df = data.frame(years = seq(1983, length.out =28),   
+                  model_year_coef, 
+                  l_ci, u_ci)
+  
+  # Now we plot the coefficients with their CI's
+  ggplot(df, aes(x = years, y = model_year_coef)) +
+      geom_errorbar(aes(ymax = u_ci, ymin = l_ci)) +
+      geom_point(col = 2)  + 
+      geom_hline(yintercept=0, linetype="dashed") +
+      ggtitle(title) + labs( y = ylab)
+}
+
+# Example
+# heading ="Calender year estimated time trend (log-rate ratios)"
+# plot_year_trend(model_chd, heading)
+
+```
+
+Now we plot it.
+
+```{r}
+heading ="Estimated calender year log-rate ratios time trend for CHD deaths"
+ylab = "Mortality log-rate ratio"
+plot_year_trend(model_chd, heading, ylab)
+```
+
+We see that there is a downward trend of the log-rate ratios of the mortality rate over the calender year. Further we can see that the last 16 CI's do not overlap with zero and are progressively found further away from the zero line over the calend years. Also, as a side note we see that perhaps there is some seasonality as well, with the wavey sort of pattern. 
+
+This downward trend also corroborates our findings when we fit the model with several of the log-rate ratios of the later calender years (year 14 and onward) being statistically significant. This means that the difference between the log-rate ratio of the mortality rate of the first calender year (the reference year/group) is statistically different from those of the later years. 
+
+## Question 4 b: Non-CHD Mortality Analysis
+
+Now to model the non-CHD deaths, we first create the non-CHD death counts and then check if there are non-zero events in each age category. 
+```{r}
+
+frdeaths2$nonchd = frdeaths2$events - frdeaths2$chd
+table(frdeaths2$ageg, frdeaths2$nonchd)
+
+```
+
+Indeed there are stricly positive number of events per age category. We can now proceed with the analysis. 
+
+Below we model the non-CHD deaths similarly as we did for the CHD deaths.
+
+```{r}
+model_nonchd <- glm(nonchd~ as.factor(yearg) + as.factor(ageg) + sexg + area, offset=log(followupyears), data=frdeaths2, family=poisson(link='log'))
+summary(model_nonchd)
+
+```
+
+
+We see that, apart from one, none of the coefficients of the calender years are statistically significant. This already suggests that there shoud not be any downward trend.
+
+We plot the non-CHD mortality model calender year coefficient trend with confidence intervals and a horizontal line for value of the intercept (the mortality log rate-ratio of the first calender year - the reference group). We use the same plot_year_trend() function to do this below.  
+
+```{r}
+heading ="Estimated calender year log-rate ratios time trend for Non-CHD deaths"
+ylab = "Mortality log-rate ratio"
+plot_year_trend(model_nonchd, heading, ylab)
+```
+
+We see in this graph that, apart from one, all the confidence intervals intercept the zero line, suggesting that none of them as statistically significantly different from zero. Hence, we do not observe any downward trend, as was in the CHD case, above and beyond some statistical noise. This also makes sense as our estimates for the log-rate ratios of the calender years were not statistically significant.  
+
+
+## Question 4 c: CHD Mortality Log-Rate Analysis
+
+To plot the CHD mortality log-rate trend over calendar time in terms of the estimated baseline, instead of the log-rate ratios, we need to not have any intercept which would refer to a reference group's rate ratio. Hence, by simply forcing the intercept to be zero in the glm, the coefficients of the model will represent the mortality log-rates of the calendar years. 
+
+```{r}
+model_chd_mortality_rate <- glm(chd ~ as.factor(yearg) + as.factor(ageg) + sexg + area -1, offset=log(followupyears), data=frdeaths2, family=poisson(link='log'))
+summary(model_chd_mortality_rate) 
+
+```
+
+We modify the plot_year_trend function to plot the mortality trend over calendar time in terms of the estimated mortality log-rates with Ci's. 
+
+```{r plot_year_trend_rates function}
+
+# Defining function that will plot the estimated 
+# calendar time (log rate-ratios) with their CI's.
+
+
+plot_year_trend_rates = function(model, title, ylab){
+  
+  # Extract variables from model
+  model_year_coef = coef(model)[1:29]
+  confints_all = as.data.frame(confint(model))
+  confints_calender_years = confints_all[1: 29,]
+  u_ci = confints_calender_years[, 2]
+  l_ci = confints_calender_years[, 1]
+  
+  # Now we will create a dataframe for ggplot
+  df = data.frame(years = seq(1982, length.out =29),   
+                  model_year_coef, 
+                  l_ci, u_ci)
+  
+  # Now we plot the coefficients with their CI's
+  ggplot(df, aes(x = years, y = model_year_coef)) +
+      geom_errorbar(aes(ymax = u_ci, ymin = l_ci)) +
+      geom_point(col = 2)  + 
+      geom_hline(yintercept=model_year_coef[1], linetype="dashed") +
+      ggtitle(title) + labs(y = ylab)
+}
+
+# Example
+# heading ="Calender year estimated time trend (log-rate ratios)"
+# plot_year_trend(model_chd, heading)
+
+```
+
+We now plot this using the plot_year_trend_rates() function below.
+
+```{r}
+
+heading ="Estimated calender year mortality log-rates time trend CHD."
+yaxis = "Mortality log-rate"
+plot_year_trend_rates(model_chd_mortality_rate, heading, ylab=yaxis)
+
+```
+
+From the above plot we see a similar decreasing trend as when we plotted the log-rate ratio over the calender years before. The horizontal line is drawn accross the estimted mortality log-rate of the reference year 1982. 

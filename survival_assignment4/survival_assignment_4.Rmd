@@ -1,0 +1,425 @@
+---
+title: "Survival Analysis HW4"
+author: "Faizan Khalid Mohsin"
+date: "March 20, 2019"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(survival)
+require(dplyr)
+library(Hmisc)
+library(survminer)
+require(knitr)
+require(xtable)
+require(stargazer)
+require(Epi)
+
+```
+
+\newpage
+
+# Question 1
+
+Age could be added to the model also as a time-dependent covariate, to take into account that the patients are aging during the follow-up. Do this using the tt argument of the coxph function (please show your function call). What happened to the age effect estimate compared to the model with the fixed baseline age variable? Explain why.
+
+First, we fit the time-independant age effect Cox model.
+
+```{r }
+data(veteran)
+veteran$prior = as.factor(veteran$prior/10)
+veteran$trt = as.numeric(veteran$trt) - 1
+
+model0 <- coxph(Surv(time, status) ~ trt + karno  + age  + prior + celltype + diagtime
+                                  , data=veteran)
+summary(model0)
+
+```
+
+
+We will now fit the time-dependant age effect Cox model. 
+
+```{r}
+model1 <- coxph(Surv(time, status) ~ trt + karno  + tt(age) + prior + celltype + diagtime
+                                  , tt=function(x,t, ...) x + t/365.25, data=veteran)
+summary(model1)
+
+```
+
+
+```{r, include=F}
+model_0 <- coxph(Surv(time, status) ~ trt + age, data=veteran)
+summary(model_0)
+
+model_1 <- coxph(Surv(time, status) ~ trt + tt(age)
+                                  , tt=function(x,t, ...) x + t/365.25, data=veteran)
+summary(model_1)
+
+# table1 = kable(xtable(model0))
+# table2 = kable(xtable(model1))
+# #kable(stargazer(model0, model1, align = TRUE))
+# #kable(stargazer(model0))
+# rbind(table1[c(1,2, 5)], table2[c(5,6)])
+# table1[c(1,2, 5)]
+# table2[c(5,6)]
+```
+
+
+We can see that the estimate of the age coefficient is unchanged when we make it time-dependent. The estimate goes from $\hat{\beta_{agefixed}}$ = `r coef(model0)[3]` (HZ = `r exp(coef(model0)[3])`) to $\hat{\beta_{age-time-depend}}$ = `r coef(model1)[3]` (HZ = `r exp(coef(model1)[3])`). We also observe that the p-values of age in the two models are the same. Hence, the age effect estimate does not change when we make age time-dependant.  
+
+This can also be seen mathematically and we show this result in the attachment.
+
+# Question 2
+
+## Question 2 a
+
+Going back to the model without age or other prognostic factors, one way to avoid assuming proportionality of the treatment effect over the entire follow-up period would be to estimate separate treatment effects for early and later parts of the follow-up period. Fit a Cox model that allows for separate treatment effects before and after 100 days of follow-up. Construct the required time-dependent covariates by using the tt argument of the coxph function (please show your coxph function call). Comment on the results compared to the Cox model that assumed a constant treatment effect. Do you see any problems in looking for different treatment effects over the follow-up period, especially if we chose the 100-day cutoff based on seeing the non-parametric survival curves? 
+
+```{r, include=F}
+# attach(veteran)
+# length(trt)
+# length(time)
+# veteran
+# ifelse(time<=100, 0, 1)*trt
+# I(time<=100)*trt
+# 
+# ifelse(time>100, 0, 1)*trt
+# I(time>100)*trt
+# 
+# 
+# model2 <- coxph(Surv(time, status) ~ tt(trt)  
+#                 , tt=function(x,t, ...) cbind(ifelse(t<=100, 0, 1)*x , ifelse(t>100, 1, 0)*x)
+#                 , data=veteran)
+# summary(model2)
+```
+
+
+First, we fit the time-dependant treatment effect Cox model. 
+
+
+```{r}
+
+# Cox model that assumes a time dependant treatment effect
+
+model3 <- coxph(Surv(time, status) ~ tt(trt)  
+                , tt=function(x,t, ...) cbind(I(t<=100)*x ,I(t>100)*x)
+                , data=veteran)
+summary(model3)
+
+```
+
+
+We will now fit the time-independant treatment effect Cox model. 
+
+
+```{r}
+# Cox model that assumed a constant treatment effect
+
+model4 <- coxph(Surv(time, status) ~ trt, data=veteran)
+summary(model4)
+
+```
+
+
+From the above output, for time-dependant treatment effect we see that the coefficient estimate of treatment effect changes from positive to negative when comparing before and after 100 days of follow-up.   
+
+In terms of comparing to the Cox model that assumed a constant treatment effect, it gives two very different treatment effects before and after 100 days of follow-up, whereas the constant treatment effect gives one "aggregate" effect estimate over all the follow-up period. Further, when we assume time-dependent treatment effect, the hazard ratios of the before and after 100 days (HR = 1.4901, p = 0.0799 and HR = 0.5067, p = 0.0316, respectively) are both more  significant than the constant treatment effect hazard ratio (HR = 1.018, p = 0.922), with the hazard ratio for the follow-up period after the 100 days is statistically significant. 
+
+Further, when we divide the data based on cut-off times we will have multiple testing problem. Hence, our significance level should be $\alpha = 5\%/2$ = $2.5\%$. In such a case, neither hazard ratio for before and after 100 days is statistically significant. 
+
+It is in fact difficult to choose the cut-off period when looking for if there are different treatment effects over the different follow-up time intervals. It would have perhaps been better to look at the survival curves of treatment and no-treatment, and based on that, chosen the cut-off point. Hence, we produce the survival curves below. 
+
+
+```{r}
+fit <- survfit(Surv(time, status) ~ trt , data=veteran)
+plot(fit, ylab = "Survival Probability", xlab="Time (days)", lwd=2, lty=1:2, col=1:2 )
+abline(v = 168, lty = "dotted", lwd = 2)
+legend("topright", c("No Treatment", "Treatment"), lwd = 2,  col = 1:2, lty = 1:2) 
+title("Kaplan-Meier Curves") 
+
+```
+
+The vertical dotted line is where the two curves intersect which is at about time 168 days. Hence, based on the K-M curves it would have been better to select the cut-off time to be 168 days instead of 100 days.
+
+## Question 2 b
+
+Specify (algebraically) the hazard model you fitted in Q2(a)
+
+Question done in the attachment.
+
+
+# Question 3
+
+## Question 3 i
+
+
+From the transplant data, estimate (i) the probability of receiving transplant using the Kaplan-Meier method.
+
+```{r}
+# Create time variables:
+
+data(transplant)
+
+# We will change the level withdraw to censored and create variable transplant$events_num
+# that are coded 0, 1, 2. where 0 is censured, 1 is liver transplant, and 2 is death. 
+transplant$event = as.character(transplant$event)
+transplant$events = ifelse(transplant$event == "withdraw", "censored", transplant$event)
+transplant$events_num = ifelse(transplant$events == "censored", 0,
+                               ifelse(transplant$events == "death", 2, 1))
+table(transplant$events_num)
+
+# We will change the follow-up time to years so it is in the same unit as age variable. 
+
+transplant$futime = transplant$futime / 365.25
+str(transplant)
+
+# Age has missing data, with 18 people are missing age, which is a very 
+# small percentage of the data, hence, we will simply work with the complete cases. 
+
+transplant = transplant[complete.cases(transplant), ]
+
+# Less than 80% actually received the transplant during the study:
+sum(transplant$events_num==1)/nrow(transplant)
+
+# 8% actually died during the study:
+sum(transplant$events_num==2)/nrow(transplant)
+
+```
+
+
+From the above output it is important to note that `r round(sum(transplant$events_num==1)/nrow(transplant), digits = 2) ` actually received the transplant during the stud and that `r round(sum(transplant$events_num==2)/nrow(transplant), digits = 2)` actually died during the study. 
+
+Below we plot the probability of receiving transplant over time in years. 
+
+```{r}
+ 
+# Check that the event times are positive:
+
+eps <- 0.00001
+transplant$futime = ifelse(transplant$futime==0, eps, transplant$futime)
+
+# K-M curve for probability of receiving transplantation:
+
+fit <- survfit(Surv(futime,events_num==1)~1, data=transplant)
+
+plot(fit, col=2, xlab="Years" #, ylim=c(0,1),xlim=c(0,1)
+     , ylab="Probability", lwd=2, conf.int=T, mark.time=TRUE,
+     main="Waiting time for transplantation", fun="event")
+legend("bottomright", col=2, legend=c("1-KM"), lwd=2, bty='n')
+abline(h = 0.90, lty = "dotted", lwd = 1)
+abline( v = 1.5, lty = "dotted", lwd = 2)
+```
+
+From the above plot we can see that the longer we wait the higher the probability becomes for receiving a transplant. And the probability is dramatically increasing uptill 1.5 years (dotted vertical line) of getting a transplant and plateaus and remains at 90% (the dotted horizontal line) after 2 years. 
+
+## Question 3 ii
+
+From the transplant data, estimate the cumulative incidence of receiving transplant using the non-parametric cumulative incidence estimator. Present the results as curves over time. 
+
+
+```{r}
+# Non-parametric cumulative incidence analysis:
+
+library(cmprsk)
+cifit <- cuminc(transplant$futime, transplant$events_num, cencode=0)
+
+plot(cifit[1], curvlab = NA,  xlab="Years", lwd=2)
+lines(fit, lwd=2, col=2, conf.int=F, fun="event", lty = 2)
+legend("bottomright", col=2:1, legend=c("1-KM", 'Non-parametric cumulative incidence estimator')
+       , lwd=2, bty='n', lty = c(2,1))
+title("Probability of receiving transplant using Kaplan-Meier 
+      \n& Non-parametric cumulative incidence estimator methods")
+
+```
+
+## Question 3 iii 
+
+Which method would you prefer and why?
+
+We would choose the cumulative incidence method because it takes into account the competing risks (that there are more than one event of interest). The Kaplan Meier estimate does not take into account the competing risk. If there was only one event of interest (death or transplant) then one minus the Kaplan-Meier curve would give us the cumulative incidence curve. However, since we have  two events of interest (death and transplant) then one minus the Kaplan Meier curve does not give us exactly the cumulative incidence curve. Hence, it is better to actually calculate the cumulative incidence curves directly using the above method. 
+
+From the above plot it can be seen that the Kaplan-Meier method over estimates the probability of receiving a transplant compared to the non-parametric cumulative incidence estimator.
+
+# Question 4
+
+Fit appropriate Cox and Fine & Gray models adjusted for age, sex, ABO blood group and year, and use these to calculate the cumulative incidence curves for receiving transplant and death at the average covariate values.
+
+
+```{r}
+# Cox models for transplantation and death before transplantation:
+transplant$year <- transplant$year - mean(transplant$year)
+
+model1 <- coxph(Surv(transplant$futime,transplant$events_num==1)~age + sex + abo + year,
+                data=transplant)
+summary(model1)
+
+model2 <- coxph(Surv(transplant$futime,transplant$events_num==2)~age + sex + abo + year,
+                data=transplant)
+summary(model2)
+
+# Calculate the cumulative incidence of receiving transplant at average covariate values:
+
+L1 <- basehaz(model1, centered=FALSE)
+L1$hazard <- L1$hazard * as.numeric(exp(t(colMeans(model.matrix(model1))) %*% coef(model1)))
+names(L1) <- c('ch1','time')
+L2 <- basehaz(model2, centered=FALSE)
+L2$hazard <- L2$hazard * as.numeric(exp(t(colMeans(model.matrix(model2))) %*% coef(model2)))
+names(L2) <- c('ch2','time')
+intersect(names(L1),names(L2))
+ci <- merge(L1, L2)
+
+# Cumulative hazard increments:
+
+ci$h1 <- c(ci$ch1[1],ci$ch1[2:nrow(ci)]-ci$ch1[1:(nrow(ci)-1)])
+ci$h2 <- c(ci$ch2[1],ci$ch2[2:nrow(ci)]-ci$ch2[1:(nrow(ci)-1)])
+#head(ci)
+#tail(ci)
+
+# Overall survival probability (two alternative estimators):
+
+ci$surv <- exp(-(c(0.0,ci$ch1[1:(nrow(ci)-1)]) + c(0.0,ci$ch2[1:(nrow(ci)-1)])))
+ci$kmsurv <- cumprod(1.0 - (c(0.0,ci$h1[1:(nrow(ci)-1)]) + c(0.0,ci$h2[1:(nrow(ci)-1)])))
+#head(ci)
+#tail(ci)
+
+# plot(ci$time, ci$surv, type='s')
+# lines(ci$time, ci$kmsurv, type='s', col='red')
+
+# Calculate cumulative incidence:
+
+ci$ci1 <- cumsum(ci$h1 * ci$kmsurv)
+ci$ci2 <- cumsum(ci$h2 * ci$kmsurv)
+#head(ci)
+#tail(ci)
+
+# Plot:
+
+# plot(ci$time, ci$ci1, type='s', lwd=2, lty=c('solid'), #ylim=c(0,1), xlim=c(0,1),
+#      xlab="Years since entering the waiting list",
+#     ylab="Cumulative incidence", main='Cumulative incidence functions')
+# lines(ci$time, ci$ci2, type='s', lwd=2, lty=c('dashed'))
+# legend('right', legend=c('Transplant','Death'), lwd=2, lty=c('solid','dashed'), bty='n')
+
+# Fine & Gray models:
+
+mm <- cbind(transplant$age, transplant$sex, transplant$abo, transplant$year)
+colnames(mm) <- c('age','sex','abo', 'year')
+
+fgmodel1 <- crr(transplant$futime, transplant$events_num, cov1=mm, failcode=1, cencode=0)
+summary(fgmodel1)
+
+fgmodel2 <- crr(transplant$futime, transplant$events_num, cov1=mm, failcode=2, cencode=0)
+summary(fgmodel2)
+
+# Cumulative incidence at average covariate values:
+
+fgci1 <- predict(fgmodel1, cov1=t(colMeans(mm)))
+fgci2 <- predict(fgmodel2, cov1=t(colMeans(mm)))
+```
+
+
+Below are the cumulative incidence curves for receiving transplant and death at the average covariate values. 
+
+```{r}
+plot(ci$time, ci$ci1, type='s', lwd=2, lty=c('solid'), # ylim=c(0,1), xlim=c(0,1),
+     xlab="Years since entering the waiting list", ylab="Cumulative incidence",
+     main='Cumulative incidence functions')
+lines(ci$time, ci$ci2, type='s', lwd=2, lty=c('dashed'))
+lines(fgci1[,1], fgci1[,2], type='s', lwd=2, lty=c('solid'), col='red')
+lines(fgci2[,1], fgci2[,2], type='s', lwd=2, lty=c('dashed'), col='red')
+lines(ci$time, ci$ci2 - ci$ci1, type='s', lwd=2, lty=c('dotted'))
+#abline(a = 0.8, b = 0, type='s', lwd=1, lty=c('dotted'))
+legend('right', legend=c('Transplant (F-G)','Death (F-G)','Transplant (Cox)','Death (Cox)'), lwd=2,
+       lty=c('solid','dashed','solid','dashed'), col=c('red','red','black','black'), bty='n')
+
+
+```
+
+```{r, include =F}
+plot(ci$time, ci$ci1, type='s', lwd=2, lty=c('solid'), # ylim=c(0,1), xlim=c(0,1),
+     xlab="Years since entering the waiting list", ylab="Cumulative incidence",
+     main='Cumulative incidence functions')
+lines(fgci1[,1], fgci1[,2], type='s', lwd=2, lty=c('solid'), col='red')
+
+lines(ci$time, ci$ci2, type='s', lwd=2, lty=c('dashed'))
+lines(fgci2[,1], fgci2[,2], type='s', lwd=2, lty=c('dashed'), col='red')
+lines(ci$time, ci$ci2 - ci$ci1, type='s', lwd=2, lty=c('dotted'))
+#abline(a = 0.8, b = 0, type='s', lwd=1, lty=c('dotted'))
+legend('right', legend=c('Transplant (F-G)','Death (F-G)','Transplant (Cox)','Death (Cox)'), lwd=2,
+       lty=c('solid','dashed','solid','dashed'), col=c('red','red','black','black'), bty='n')
+```
+
+How do the results compare between the models?
+
+From the above plot we see that for transplant, the Fine and Gray model predicts higher cumulative incidence probability compared to the Cox model at the average covariate values. 
+
+For death, they are the same as the curves overlap one another.
+
+# Question 5
+
+Use the fitted Cox and Fine & Gray models adjusted to calculate individual-level oneyear cumulative incidences of receiving the transplant. Present these in a scatterplot. 
+
+
+```{r}
+# Comparison of predictions: calculate 1-year cumulative incidences of receiving transplant 
+# for everyone in the dataset:
+
+ciall <- rep(NA, nrow(transplant))
+fgciall <- rep(NA, nrow(transplant))
+s <- 1 # 1-year cumulative incidence
+
+for (i in 1:nrow(transplant)) {
+    L1 <- basehaz(model1, centered=FALSE)
+    L1$hazard <- L1$hazard * as.numeric(exp(t(model.matrix(model1)[i,]) %*% coef(model1)))
+    names(L1) <- c('ch1','time')
+    L2 <- basehaz(model2, centered=FALSE)
+    L2$hazard <- L2$hazard * as.numeric(exp(t(model.matrix(model2)[i,]) %*% coef(model2)))
+    names(L2) <- c('ch2','time')
+    ci <- merge(L1, L2)
+
+    ci$h1 <- c(ci$ch1[1],ci$ch1[2:nrow(ci)]-ci$ch1[1:(nrow(ci)-1)])
+    ci$h2 <- c(ci$ch2[1],ci$ch2[2:nrow(ci)]-ci$ch2[1:(nrow(ci)-1)])
+
+    ci$surv <- exp(-(c(0.0,ci$ch1[1:(nrow(ci)-1)]) + c(0.0,ci$ch2[1:(nrow(ci)-1)])))
+    ci$kmsurv <- cumprod(1.0 - (c(0.0,ci$h1[1:(nrow(ci)-1)]) + c(0.0,ci$h2[1:(nrow(ci)-1)])))
+
+    ci$ci1 <- cumsum(ci$h1 * ci$kmsurv)
+    ci$ci2 <- cumsum(ci$h2 * ci$kmsurv)
+    ciall[i] <- ci$ci1[findInterval(s, ci$time)]
+    if (i %% 100 == 0)
+        print(i)
+}
+#calculate individual-level one-year cumulative incidences of receiving the transplant
+sum(ciall)
+
+# Fine Gray #calculate individual-level one-year cumulative incidences of receiving the transplant
+fgci <- predict(fgmodel1, cov1=mm)
+fgciall <- fgci[findInterval(s, fgci[,1]),2:ncol(fgci)]
+sum(fgciall)
+
+plot(ciall, fgciall, xlab='Cox model based CI', ylab='F-G model based CI',
+     main='Comparison of predictions from the two models',
+     xlim = c(0,1), ylim = c(0,1))
+abline(a=0, b=1, lty='dotted', col='blue')
+
+```
+
+The points that are above the blue line are the points which have a higher probability predicted by the Fine and Gray model compared to the Cox model. And the points that are below the blue line have higher probabilities predicted by the Cox model compared to the Fine and Gray Model. 
+
+How do the results compare between the models?
+
+Firstly, there is a clear positively correlated linear trend. Further, we can see a pattern that near the edge of the graph (between probabilities 0.4-0.5 and 0.9-1) for the majority of the observations the Fine & Gray model over predicts the probability compared to the Cox model and that between probabilities 0.5-0.9 the Cox model over predicts higher probabilites compared to the Fine & Gray model.  
+
+Furuther, we find that for the Cox model the individual-level one year cumulative incidences of receiving the transplant is `r sum(ciall)`.
+
+We find that for the Fine & Gray model the individual-level one year cumulative incidences of receiving the transplant is `r sum(fgciall)`.
+
+The two estimates are approximately the same with a difference of only `r sum(fgciall) - sum(ciall)`.
+
+
